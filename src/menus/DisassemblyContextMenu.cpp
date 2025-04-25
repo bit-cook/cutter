@@ -25,6 +25,7 @@ DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent, MainWindow *main
       offset(0),
       canCopy(false),
       mainWindow(mainWindow),
+      ioModesController(this),
       actionEditInstruction(this),
       actionNopInstruction(this),
       actionJmpReverse(this),
@@ -520,7 +521,7 @@ void DisassemblyContextMenu::aboutToShowSlot()
 
     if (ab && ab->op) {
         const char *opexstr = RZ_STRBUF_SAFEGET(&ab->op->opex);
-        CutterJson operands = Core()->parseJson(strdup(opexstr), nullptr);
+        CutterJson operands = Core()->parseJson("opex", strdup(opexstr), nullptr);
 
         // Loop through both the operands of the instruction
         for (const CutterJson operand : operands) {

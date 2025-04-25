@@ -129,7 +129,8 @@ T *getNewInstance(MainWindow *m)
 
 using namespace Cutter;
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), core(Core()), ui(new Ui::MainWindow)
+MainWindow::MainWindow(QWidget *parent)
+    : QMainWindow(parent), core(Core()), ui(new Ui::MainWindow), ioModesController(this)
 {
     tabsOnTop = false;
     configuration = Config();
@@ -191,8 +192,7 @@ void MainWindow::initUI()
     connect(seek_to_func_start_shortcut, &QShortcut::activated, this,
             &MainWindow::seekToFunctionStart);
 
-    QShortcut *refresh_shortcut = new QShortcut(QKeySequence(QKeySequence::Refresh), this);
-    connect(refresh_shortcut, &QShortcut::activated, this, &MainWindow::refreshAll);
+    ui->actionRefresh_contents->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
 
     connect(ui->actionZoomIn, &QAction::triggered, this, &MainWindow::onZoomIn);
     connect(ui->actionZoomOut, &QAction::triggered, this, &MainWindow::onZoomOut);
@@ -297,6 +297,7 @@ void MainWindow::initToolBar()
     ui->menuDebug->addAction(debugActions->actionStartEmul);
     ui->menuDebug->addAction(debugActions->actionAttach);
     ui->menuDebug->addAction(debugActions->actionStartRemote);
+    ui->menuDebug->addAction(debugActions->actionStop);
     ui->menuDebug->addSeparator();
     ui->menuDebug->addAction(debugActions->actionStep);
     ui->menuDebug->addAction(debugActions->actionStepOver);
@@ -538,7 +539,7 @@ void MainWindow::openNewFile(InitialOptions &options, bool skipOptionsDialog)
     if (options.script.isEmpty()) {
         QString script = QString("%1.rz").arg(this->filename);
         if (rz_file_exists(script.toStdString().data())) {
-            QMessageBox mb;
+            QMessageBox mb(this);
             mb.setWindowTitle(tr("Script loading"));
             mb.setText(tr("Do you want to load the '%1' script?").arg(script));
             mb.setStandardButtons(QMessageBox::Yes | QMessageBox::No);

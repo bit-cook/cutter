@@ -2,6 +2,7 @@
 #include "ui_SearchWidget.h"
 #include "core/MainWindow.h"
 #include "common/Helpers.h"
+#include "DisassemblyPreview.h"
 
 #include <QDockWidget>
 #include <QTreeWidget>
@@ -16,20 +17,70 @@ static const int kMaxTooltipHexdumpBytes = 64;
 
 }
 
-static const QMap<QString, QString> searchBoundaries {
-    { "io.maps", "All maps" },
-    { "io.map", "Current map" },
-    { "raw", "Raw" },
-    { "block", "Current block" },
-    { "bin.section", "Current mapped section" },
-    { "bin.sections", "All mapped sections" },
+static const QVector<std::pair<QString, const char *>> searchBoundaries {
+    { "io.maps", QT_TR_NOOP("All maps") },
+    { "io.map", QT_TR_NOOP("Current map") },
+    { "raw", QT_TR_NOOP("Whole file") },
+    { "block", QT_TR_NOOP("Current block") },
+    { "bin.section", QT_TR_NOOP("Current mapped section") },
+    { "bin.sections", QT_TR_NOOP("All mapped sections") },
+    { "bin.segment", QT_TR_NOOP("Current mapped segment") },
+    { "bin.segments", QT_TR_NOOP("All mapped segments") },
+    { "code", QT_TR_NOOP("All exec sections") },
+    { "io.sky", QT_TR_NOOP("All io.skyline") },
+    { "analysis.fcn", QT_TR_NOOP("Current function") },
+    { "analysis.bb", QT_TR_NOOP("Current basic block") },
 };
 
-static const QMap<QString, QString> searchBoundariesDebug { { "dbg.maps", "All memory maps" },
-                                                            { "dbg.map", "Memory map" },
-                                                            { "block", "Current block" },
-                                                            { "dbg.stack", "Stack" },
-                                                            { "dbg.heap", "Heap" } };
+static const QVector<std::pair<QString, const char *>> searchBoundariesDebug {
+    { "dbg.maps", QT_TR_NOOP("All memory maps") },
+    { "dbg.map", QT_TR_NOOP("Memory map") },
+    { "block", QT_TR_NOOP("Current block") },
+    { "dbg.program", QT_TR_NOOP("All exec sections") },
+    { "dbg.stack", QT_TR_NOOP("Stack") },
+    { "dbg.heap", QT_TR_NOOP("Heap") }
+};
+
+struct SearchKindInfo
+{
+    SearchKind kind;
+    const char *name;
+    const char *textHint;
+    bool noInput;
+};
+
+static const SearchKindInfo searchKinds[] = {
+    { SearchKind::AsmCode, QT_TR_NOOP("asm code"), QT_TR_NOOP("jmp rax"), false },
+    { SearchKind::String, QT_TR_NOOP("string (literal)"), QT_TR_NOOP("foobar"), false },
+    { SearchKind::StringCaseInsensitive, QT_TR_NOOP("string (case insensitive)"),
+      QT_TR_NOOP("fOobaR"), false },
+    { SearchKind::StringRegexExtended, QT_TR_NOOP("string (extended regex)"),
+      QT_TR_NOOP("(foo){,4}[Bb]ar"), false },
+    { SearchKind::HexString, QT_TR_NOOP("hex string"), QT_TR_NOOP("ab01..23...1234ef"), false },
+    { SearchKind::ROPGadgets, QT_TR_NOOP("ROP gadgets"), QT_TR_NOOP("pop,,pop"), false },
+    { SearchKind::ROPGadgetsRegex, QT_TR_NOOP("ROP gadgets (regex)"), QT_TR_NOOP("mov e[abc]x"),
+      false },
+    { SearchKind::Value32BE, QT_TR_NOOP("32bit big endian value"),
+      QT_TR_NOOP("0xdeadbeef (big endian)"), false },
+    { SearchKind::Value32LE, QT_TR_NOOP("32bit little endian value"),
+      QT_TR_NOOP("0xdeadbeef (little endian)"), false },
+    { SearchKind::Value64BE, QT_TR_NOOP("64bit big endian value"),
+      QT_TR_NOOP("0xfedcba9876543210 (big endian)"), false },
+    { SearchKind::Value64BE, QT_TR_NOOP("64bit little endian value"),
+      QT_TR_NOOP("0xfedcba9876543210 (little endian)"), false },
+    { SearchKind::CryptographicMaterial, QT_TR_NOOP("Cryptographic material"), nullptr, true },
+    { SearchKind::MagicSignature, QT_TR_NOOP("Magic signature"), nullptr, true },
+};
+
+static const SearchKindInfo &searchKindInfo(SearchKind kind)
+{
+    auto res = std::find_if(std::begin(searchKinds), std::end(searchKinds),
+                            [kind](const SearchKindInfo &info) { return info.kind == kind; });
+    if (res != std::end(searchKinds)) {
+        return *res;
+    }
+    return searchKinds[1];
+}
 
 SearchModel::SearchModel(QList<SearchDescription> *search, QObject *parent)
     : AddressableItemModel<QAbstractListModel>(parent), search(search)
@@ -54,6 +105,16 @@ QVariant SearchModel::data(const QModelIndex &index, int role) const
     const SearchDescription &exp = search->at(index.row());
 
     switch (role) {
+    case Qt::FontRole: {
+        switch (index.column()) {
+        case CODE:
+            return QFont("Inconsolata");
+        case DATA:
+            return QFont("Inconsolata");
+        default:
+            return QVariant();
+        }
+    }
     case Qt::DisplayRole:
         switch (index.column()) {
         case OFFSET:
@@ -64,8 +125,9 @@ QVariant SearchModel::data(const QModelIndex &index, int role) const
             return exp.code;
         case DATA:
             return exp.data;
-        case COMMENT:
-            return Core()->getCommentAt(exp.offset);
+        case COMMENT: {
+            return exp.detail;
+        }
         default:
             return QVariant();
         }
@@ -165,7 +227,7 @@ bool SearchSortFilterProxyModel::lessThan(const QModelIndex &left, const QModelI
     case SearchModel::DATA:
         return left_search.data < right_search.data;
     case SearchModel::COMMENT:
-        return Core()->getCommentAt(left_search.offset) < Core()->getCommentAt(right_search.offset);
+        return left_search.detail < right_search.detail;
     default:
         break;
     }
@@ -193,33 +255,22 @@ SearchWidget::SearchWidget(MainWindow *main) : CutterDockWidget(main), ui(new Ui
     connect(Core(), &CutterCore::commentsChanged, this,
             [this]() { qhelpers::emitColumnChanged(search_model, SearchModel::COMMENT); });
 
-    QShortcut *enter_press = new QShortcut(QKeySequence(Qt::Key_Return), this);
-    connect(enter_press, &QShortcut::activated, this, [this]() {
-        disableSearch();
-        refreshSearch();
-        checkSearchResultEmpty();
-        enableSearch();
-    });
-    enter_press->setContext(Qt::WidgetWithChildrenShortcut);
-
-    connect(ui->searchButton, &QAbstractButton::clicked, this, [this]() {
-        disableSearch();
-        refreshSearch();
-        checkSearchResultEmpty();
-        enableSearch();
-    });
+    connect(ui->filterLineEdit, &QLineEdit::returnPressed, this, &SearchWidget::runSearch);
+    connect(ui->searchButton, &QAbstractButton::clicked, this, &SearchWidget::runSearch);
 
     connect(ui->searchspaceCombo,
             static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
             [this](int index) { updatePlaceholderText(index); });
+
+    updateColors();
+    connect(Config(), &Configuration::colorsUpdated, this, &SearchWidget::updateColors);
 }
 
 SearchWidget::~SearchWidget() {}
 
 void SearchWidget::updateSearchBoundaries()
 {
-    QMap<QString, QString>::const_iterator mapIter;
-    QMap<QString, QString> boundaries;
+    QVector<std::pair<QString, const char *>> boundaries;
 
     if (Core()->currentlyDebugging && !Core()->currentlyEmulating) {
         boundaries = searchBoundariesDebug;
@@ -227,13 +278,12 @@ void SearchWidget::updateSearchBoundaries()
         boundaries = searchBoundaries;
     }
 
-    mapIter = boundaries.cbegin();
-    ui->searchInCombo->setCurrentIndex(ui->searchInCombo->findData(mapIter.key()));
+    ui->searchInCombo->setCurrentIndex(ui->searchInCombo->findData(boundaries[0].first));
 
     ui->searchInCombo->blockSignals(true);
     ui->searchInCombo->clear();
-    for (; mapIter != boundaries.cend(); ++mapIter) {
-        ui->searchInCombo->addItem(mapIter.value(), mapIter.key());
+    for (auto item : boundaries) {
+        ui->searchInCombo->addItem(tr(item.second), item.first);
     }
     ui->searchInCombo->blockSignals(false);
 
@@ -252,12 +302,9 @@ void SearchWidget::refreshSearchspaces()
         cur_idx = 0;
 
     ui->searchspaceCombo->clear();
-    ui->searchspaceCombo->addItem(tr("asm code"), QVariant("/acj"));
-    ui->searchspaceCombo->addItem(tr("string"), QVariant("/j"));
-    ui->searchspaceCombo->addItem(tr("string (case insensitive)"), QVariant("/ij"));
-    ui->searchspaceCombo->addItem(tr("hex string"), QVariant("/xj"));
-    ui->searchspaceCombo->addItem(tr("ROP gadgets"), QVariant("/Rj"));
-    ui->searchspaceCombo->addItem(tr("32bit value"), QVariant("/vj"));
+    for (auto &kind : searchKinds) {
+        ui->searchspaceCombo->addItem(tr(kind.name), static_cast<int>(kind.kind));
+    }
 
     if (cur_idx > 0)
         ui->searchspaceCombo->setCurrentIndex(cur_idx);
@@ -265,10 +312,18 @@ void SearchWidget::refreshSearchspaces()
     refreshSearch();
 }
 
+void SearchWidget::runSearch()
+{
+    disableSearch();
+    refreshSearch();
+    checkSearchResultEmpty();
+    enableSearch();
+}
+
 void SearchWidget::refreshSearch()
 {
     QString searchFor = ui->filterLineEdit->text();
-    QString searchSpace = ui->searchspaceCombo->currentData().toString();
+    auto searchSpace = static_cast<SearchKind>(ui->searchspaceCombo->currentData().toInt());
     QString searchIn = ui->searchInCombo->currentData().toString();
 
     search_model->beginResetModel();
@@ -282,13 +337,24 @@ void SearchWidget::refreshSearch()
 // Called by &QShortcut::activated and &QAbstractButton::clicked signals
 void SearchWidget::checkSearchResultEmpty()
 {
-    if (search.isEmpty()) {
-        QString noResultsMessage = "<b>";
-        noResultsMessage.append(tr("No results found for:"));
-        noResultsMessage.append("</b><br>");
-        noResultsMessage.append(ui->filterLineEdit->text().toHtmlEscaped());
-        QMessageBox::information(this, tr("No Results Found"), noResultsMessage);
+    if (!search.isEmpty())
+        return;
+
+    QString searchFor = ui->filterLineEdit->text();
+    auto searchSpace = static_cast<SearchKind>(ui->searchspaceCombo->currentData().toInt());
+    if (searchFor.isEmpty() && !searchKindInfo(searchSpace).noInput) {
+        return;
     }
+    QString noResultsMessage = "<b>";
+    noResultsMessage.append(tr("No results found for:"));
+    noResultsMessage.append("</b><br>");
+    if (searchFor.isEmpty()) {
+        noResultsMessage.append(ui->searchspaceCombo->currentText().toHtmlEscaped());
+    } else {
+        noResultsMessage.append(ui->filterLineEdit->text().toHtmlEscaped());
+    }
+
+    QMessageBox::information(this, tr("No Results Found"), noResultsMessage);
 }
 
 void SearchWidget::setScrollMode()
@@ -296,26 +362,19 @@ void SearchWidget::setScrollMode()
     qhelpers::setVerticalScrollMode(ui->searchTreeView);
 }
 
-void SearchWidget::updatePlaceholderText(int index)
+void SearchWidget::updatePlaceholderText(int)
 {
-    switch (index) {
-    case 1: // string
-        ui->filterLineEdit->setPlaceholderText("foobar");
-        break;
-    case 2: // string (case insensitive)
-        ui->filterLineEdit->setPlaceholderText("FooBar");
-        break;
-    case 3: // hex string
-        ui->filterLineEdit->setPlaceholderText("deadbeef");
-        break;
-    case 4: // ROP gadgets
-        ui->filterLineEdit->setPlaceholderText("pop,,pop");
-        break;
-    case 5: // 32bit value
-        ui->filterLineEdit->setPlaceholderText("0xdeadbeef");
-        break;
-    default:
-        ui->filterLineEdit->setPlaceholderText("jmp rax");
+    // ensure we grab the correct kind.
+    auto kind = static_cast<SearchKind>(ui->searchspaceCombo->currentData().toInt());
+    auto info = searchKindInfo(kind);
+    if (info.textHint) {
+        ui->filterLineEdit->setPlaceholderText(tr(info.textHint));
+    } else {
+        ui->filterLineEdit->setPlaceholderText("");
+    }
+    ui->filterLineEdit->setDisabled(info.noInput);
+    if (info.noInput) {
+        ui->filterLineEdit->clear();
     }
 }
 
@@ -330,4 +389,9 @@ void SearchWidget::enableSearch()
 {
     ui->searchButton->setEnabled(true);
     ui->searchButton->setText(tr("Search"));
+}
+
+void SearchWidget::updateColors()
+{
+    ui->searchTreeView->setStyleSheet(DisassemblyPreview::getToolTipStyleSheet());
 }

@@ -62,6 +62,22 @@ struct CUTTER_EXPORT RegisterRef
     QString name;
 };
 
+enum class SearchKind {
+    AsmCode,
+    HexString,
+    ROPGadgets,
+    ROPGadgetsRegex,
+    String,
+    StringCaseInsensitive,
+    StringRegexExtended,
+    Value32BE,
+    Value32LE,
+    Value64BE,
+    Value64LE,
+    CryptographicMaterial,
+    MagicSignature,
+};
+
 class CUTTER_EXPORT CutterCore : public QObject
 {
     Q_OBJECT
@@ -181,13 +197,13 @@ public:
     QString getRizinVersionReadable(const char *program = nullptr);
     QString getVersionInformation();
 
-    CutterJson parseJson(char *res, const char *cmd = nullptr);
-    CutterJson parseJson(char *res, const QString &cmd = QString())
+    CutterJson parseJson(const char *name, char *res, const char *cmd = nullptr);
+    CutterJson parseJson(const char *name, char *res, const QString &cmd = QString())
     {
-        return parseJson(res, cmd.isNull() ? nullptr : cmd.toLocal8Bit().constData());
+        return parseJson(name, res, cmd.isNull() ? nullptr : cmd.toLocal8Bit().constData());
     }
 
-    QStringList autocomplete(const QString &cmd, RzLinePromptType promptType, size_t limit = 4096);
+    QStringList autocomplete(const QString &cmd, RzLinePromptType promptType);
 
     /* Functions methods */
     void renameFunction(const RVA offset, const QString &newName);
@@ -443,7 +459,7 @@ public:
      * @param pid The pid of the process, -1 for the currently debugged process
      * @return List of ProcessDescription
      */
-    QList<ProcessDescription> getProcessThreads(int pid);
+    QList<ThreadDescription> getProcessThreads(int pid = -1);
     /**
      * @brief Get a list of heap chunks
      * Uses RZ_API rz_heap_chunks_list to get vector of chunks
@@ -564,8 +580,6 @@ public:
     void setGraphEmpty(bool empty);
     bool isGraphEmpty();
 
-    bool rebaseBin(RVA base_address);
-
     void getRegs();
     QList<QString> regs;
     void setSettings();
@@ -650,9 +664,15 @@ public:
     bool isAddressMapped(RVA addr);
 
     QList<MemoryMapDescription> getMemoryMap();
-    QList<SearchDescription> getAllSearch(QString searchFor, QString space, QString in);
+    QList<SearchDescription> getAllSearch(QString searchFor, SearchKind kind, QString in);
     QList<BreakpointDescription> getBreakpoints();
-    QList<ProcessDescription> getAllProcesses();
+    /**
+     * @brief Get list of processes attachable by debugger
+     *
+     * @param pid 0 - all processes, -1 - currently debugged process
+     * @return QList<ProcessDescription>
+     */
+    QList<ProcessDescription> getProcesses(int pid = 0);
     /**
      * @brief Get the right RzReg object based on the cutter state (debugging vs emulating)
      */
@@ -849,6 +869,7 @@ private:
 
     QVector<QString> getCutterRCFilePaths() const;
     QList<TypeDescription> getBaseType(RzBaseTypeKind kind, const char *category);
+    QList<SearchDescription> getAllSearchCommand(QString searchFor, SearchKind kind, QString in);
 };
 
 class CUTTER_EXPORT RzCoreLocked
