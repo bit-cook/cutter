@@ -249,7 +249,7 @@ jobs:
           chmod a+x linuxdeployqt*.AppImage
           rm -fv "../cutter-deps/qt/plugins/imageformats/libqjp2.so"
           if [ "${{ matrix.qt-major }}" == "5" ]; then
-            export APPIMAGE_FILE="Cutter-${PACKAGE_ID}-Linux-Qt5-x86_64.AppImage"
+            export APPIMAGE_FILE="Cutter-${PACKAGE_ID}-Linux-Qt5-x86_64+plugins.AppImage"
             ./linuxdeployqt*.AppImage ./appdir/usr/share/applications/*.desktop \
               -executable=./appdir/usr/bin/python3 \
               -appimage \
@@ -257,7 +257,7 @@ jobs:
               -ignore-glob=usr/lib/python3.12/**/* \
               -verbose=2
           else
-            export APPIMAGE_FILE="Cutter-${PACKAGE_ID}-Linux-x86_64.AppImage"
+            export APPIMAGE_FILE="Cutter-${PACKAGE_ID}-Linux-x86_64+plugins.AppImage"
             ./linuxdeployqt*.AppImage ./appdir/usr/share/applications/*.desktop \
               -executable=./appdir/usr/bin/python3 \
               -appimage \
@@ -465,7 +465,7 @@ jobs:
         export PATH=/usr/local/opt/llvm/bin:$PATH
         mkdir build
         cd build
-        PACKAGE_NAME=Cutter-${PACKAGE_ID}-macOS-${{ matrix.arch }}
+        PACKAGE_NAME=Cutter-${PACKAGE_ID}-macOS-${{ matrix.arch }}+plugins
         cmake \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DPython3_ROOT_DIR="${CUTTER_DEPS_PYTHON_PREFIX}" \
@@ -515,7 +515,7 @@ jobs:
         cd
         mkdir build
         cd build
-        set PACKAGE_NAME=Cutter-%PACKAGE_ID%-Windows-x86_64
+        set PACKAGE_NAME=Cutter-%PACKAGE_ID%-Windows-x86_64+plugins
         cmake ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DCUTTER_USE_BUNDLED_RIZIN=ON ^
