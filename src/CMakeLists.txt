@@ -111,6 +111,7 @@ set(SOURCES
     common/RunScriptTask.cpp
     dialogs/EditMethodDialog.cpp
     dialogs/TypesInteractionDialog.cpp
+    dialogs/TypesVariablesDialog.cpp
     widgets/SdbWidget.cpp
     plugins/PluginManager.cpp
     common/BasicBlockHighlighter.cpp
@@ -276,6 +277,7 @@ set(HEADER_FILES
     common/Json.h
     dialogs/EditMethodDialog.h
     dialogs/TypesInteractionDialog.h
+    dialogs/TypesVariablesDialog.h
     widgets/SdbWidget.h
     plugins/PluginManager.h
     common/BasicBlockHighlighter.h
@@ -388,6 +390,7 @@ set(UI_FILES
     dialogs/WelcomeDialog.ui
     dialogs/EditMethodDialog.ui
     dialogs/TypesInteractionDialog.ui
+    dialogs/TypesVariablesDialog.ui
     widgets/SdbWidget.ui
     widgets/ColorPicker.ui
     dialogs/preferences/ColorThemeEditDialog.ui
