@@ -56,14 +56,15 @@ private:
 
     QList<XToAddress> xToAddress;
     bool blockTooltip;
+    bool isDraggable = true;
 
     RVA localXToAddress(double x);
     double addressToLocalX(RVA address);
     QList<QString> sectionsForAddress(RVA address);
     QString toolTipForAddress(RVA address);
 
-    void mousePressEvent(QMouseEvent *event) override;
-    void mouseMoveEvent(QMouseEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
+    void handleMouseAction(QMouseEvent *event, const QPoint &scenePos);
 };
 
 #endif // VISUALNAVBAR_H

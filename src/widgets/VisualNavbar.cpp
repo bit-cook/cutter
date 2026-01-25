@@ -85,6 +85,7 @@ VisualNavbar::VisualNavbar(MainWindow *main, QWidget *parent)
     this->graphicsView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     // So the graphicsView doesn't intercept mouse events.
     this->graphicsView->setEnabled(false);
+    this->graphicsView->installEventFilter(this);
     this->graphicsView->setMouseTracking(true);
     setMouseTracking(true);
 
@@ -323,7 +324,8 @@ void VisualNavbar::drawCursor(RVA addr, QColor color, QGraphicsRectItem *&graphi
     if (std::isnan(cursor_x)) {
         return;
     }
-    graphicsItem = new QGraphicsRectItem(cursor_x, 0, 2, NAVBAR_HEIGHT);
+    // Subtract 1 so the 2px wide cursor is centered
+    graphicsItem = new QGraphicsRectItem(cursor_x - 1, 0, 2, NAVBAR_HEIGHT);
     graphicsItem->setPen(Qt::NoPen);
     graphicsItem->setBrush(QBrush(color));
     graphicsScene->addItem(graphicsItem);
@@ -347,19 +349,47 @@ void VisualNavbar::on_seekChanged(RVA addr)
     this->drawSeekCursor();
 }
 
-void VisualNavbar::mousePressEvent(QMouseEvent *event)
+bool VisualNavbar::eventFilter(QObject *watched, QEvent *event)
+{
+    switch (event->type()) {
+    case QEvent::MouseButtonPress: {
+        auto *mouseEvent = static_cast<QMouseEvent *>(event);
+        const QPoint scenePos = mouseEvent->pos();
+
+        if (scenePos.y() <= NAVBAR_HEIGHT) {
+            isDraggable = true;
+            handleMouseAction(mouseEvent, scenePos);
+            return true;
+        }
+        isDraggable = false;
+        break;
+    }
+    case QEvent::MouseMove: {
+        auto *mouseEvent = static_cast<QMouseEvent *>(event);
+        const QPoint scenePos = mouseEvent->pos();
+
+        if ((mouseEvent->buttons() & Qt::LeftButton && isDraggable)
+            || scenePos.y() <= NAVBAR_HEIGHT) {
+            handleMouseAction(mouseEvent, scenePos);
+        } else {
+            QToolTip::hideText();
+        }
+        return true;
+    }
+    default:
+        break;
+    }
+
+    return QToolBar::eventFilter(watched, event);
+}
+
+void VisualNavbar::handleMouseAction(QMouseEvent *event, const QPoint &scenePos)
 {
     if (blockTooltip) {
         return;
     }
 
-    // Ignore mouse event on legend
-    qreal y = qhelpers::mouseEventPos(event).y();
-    if (y > NAVBAR_HEIGHT + 10) {
-        QToolTip::hideText();
-        return;
-    }
-    qreal x = qhelpers::mouseEventPos(event).x();
+    qreal x = scenePos.x();
     RVA address = localXToAddress(x);
     if (address != RVA_INVALID) {
         auto tooltipPos = qhelpers::mouseEventGlobalPos(event);
@@ -372,12 +402,6 @@ void VisualNavbar::mousePressEvent(QMouseEvent *event)
             Core()->seek(address);
         }
     }
-}
-
-void VisualNavbar::mouseMoveEvent(QMouseEvent *event)
-{
-    event->accept();
-    mousePressEvent(event);
 }
 
 RVA VisualNavbar::localXToAddress(double x)
