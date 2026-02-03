@@ -304,6 +304,8 @@ private:
     bool m_empty;
 };
 
+class AddressRangeScrollBar;
+
 class HexWidget : public QScrollArea
 {
     Q_OBJECT
@@ -516,6 +518,21 @@ private:
     void hideWarningRect();
     void showWarningRect(QRectF rect);
 
+    void updateViewport();
+    void scrollLines(int lines, bool clampToScrollBarRange = false);
+    /**
+     * @brief Sets the given address as the first visible address of the view
+     * No action is taken if the address is already at the top
+     * @param address Target RVA to display at the top
+     */
+    void setStartAddress(RVA address);
+
+    /**
+     * @brief Updates cursor visibility and metadata
+     * The cursor is only visible if it is within the visible address range and selection is empty
+     */
+    void updateCursorStatus();
+
     bool cursorEnabled;
     bool cursorOnAscii;
     HexCursor cursor;
@@ -608,6 +625,8 @@ private:
     bool warningRectVisible = false;
     QRectF warningRect;
     QTimer warningTimer;
+
+    AddressRangeScrollBar *vScrollBar;
 };
 
 #endif // HEXWIDGET_H

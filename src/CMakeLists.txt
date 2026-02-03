@@ -156,6 +156,7 @@ set(SOURCES
     tools/basefind/BaseFindDialog.cpp
     tools/basefind/BaseFindSearchDialog.cpp
     tools/basefind/BaseFindResultsDialog.cpp
+    widgets/AddressRangeScrollBar.cpp
     dialogs/preferences/ShortcutOptionsWidget.cpp
     shortcuts/ShortcutManager.cpp
     shortcuts/DefaultShortcuts.cpp
@@ -328,6 +329,7 @@ set(HEADER_FILES
     tools/basefind/BaseFindDialog.h
     tools/basefind/BaseFindSearchDialog.h
     tools/basefind/BaseFindResultsDialog.h
+    widgets/AddressRangeScrollBar.h
     dialogs/preferences/ShortcutOptionsWidget.h
     shortcuts/ShortcutManager.h
     shortcuts/DefaultShortcuts.h
