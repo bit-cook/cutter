@@ -3,7 +3,7 @@
 
 #include "core/CutterCommon.h"
 #include "common/RefreshDeferrer.h"
-
+#include "shortcuts/ShortcutManager.h"
 #include <QDockWidget>
 
 class MainWindow;
@@ -107,8 +107,13 @@ public slots:
 
 protected:
     virtual QWidget *widgetToFocusOnRaise();
-
     void closeEvent(QCloseEvent *event) override;
+
+    /**
+     * @brief On any event(targeting windowMove event) if the altmodifer is
+     * pressed then the dock will be non dockable.
+     */
+    bool event(QEvent *event) override;
     QString getDockNumber();
 
     MainWindow *mainWindow;
